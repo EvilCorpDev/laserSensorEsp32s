@@ -141,3 +141,5 @@ modules.xml
 .pio
 
 # End of https://www.toptal.com/developers/gitignore/api/intellij+iml,clion+iml,platformio
+
+src/secrets.yaml

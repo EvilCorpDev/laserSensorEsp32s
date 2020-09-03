@@ -1,0 +1,42 @@
+esphome:
+  name: presence_laser_sensor
+  platform: ESP32
+  board: esp32dev
+  includes:
+    - PresenceLaserSensor.h
+  platformio_options:
+    board_build.f_cpu: 160000000L
+
+wifi:
+  power_save_mode: none
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: !secret ap_ssid
+    password: !secret ap_password
+    ap_timeout: 30s
+  reboot_timeout: 0s
+
+captive_portal:
+
+ota:
+  password: !secret ota_password
+
+logger:
+
+api:
+
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_user
+  password: !secret mqtt_password
+
+sensor:
+  - platform: custom
+    lambda: |-
+      auto customSensor = new PresenceLaserSensor(32, 33);
+      App.register_component(customSensor);
+      return {customSensor};
+
+    sensors:
+      name: "Presence laser sensor"
