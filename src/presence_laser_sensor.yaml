@@ -34,7 +34,7 @@ mqtt:
 sensor:
   - platform: custom
     lambda: |-
-      auto customSensor = new PresenceLaserSensor(32, 33);
+      auto customSensor = new PresenceLaserSensor(55, 82);
       App.register_component(customSensor);
       return {customSensor};
 

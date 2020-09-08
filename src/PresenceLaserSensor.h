@@ -2,9 +2,11 @@
 #define PRESENCE_LASER_SENSOR_H
 
 #include "esphome.h"
+#include <Wire.h>
 
-#define THRESHOLD 800
-#define ANALOG_PIN_MODE ADC_6db
+#define THRESHOLD 700
+#define FRONT_LASER_ADDRESS 55
+#define BACK_LASER_ADDRESS 82
 
 #define FRONT_OCCUPIED 'o'
 #define FRONT_FREE 'f'
@@ -75,15 +77,16 @@ public:
 
 class LaserSensor {
 private:
-    int pin;
+    int address;
     bool lastValue;
+    int lastEventTime;
     char sensorOccupied;
     char sensorFree;
     EventStorage *eventStorage;
 
 public:
-    LaserSensor(int pin, char sensorOccupied, char sensorFree, EventStorage *eventStorage) {
-        this->pin = pin;
+    LaserSensor(int address, char sensorOccupied, char sensorFree, EventStorage *eventStorage) {
+        this->address = address;
         this->sensorFree = sensorFree;
         this->sensorOccupied = sensorOccupied;
         this->eventStorage = eventStorage;
@@ -92,20 +95,49 @@ public:
     }
 
     void setup() {
-        adcAttachPin(pin);
-        analogSetPinAttenuation(pin, ANALOG_PIN_MODE);
+        lastEventTime = millis();
     }
 
     void checkState() {
-        auto analogValue = analogRead(pin);
+        sendMeasureCommand(address);
 
-        if (analogValue > THRESHOLD && !lastValue) {
+        delay(1);
+
+        auto distance = readLength(address);
+
+        int timeSinceLastTry = millis() - lastEventTime;
+
+        if (distance < THRESHOLD && !lastValue && timeSinceLastTry > 900) {
             lastValue = true;
+            lastEventTime = millis();
             eventStorage->publishEvent(sensorOccupied);
-        } else if (analogValue <= THRESHOLD && lastValue) {
+        } else if (distance >= THRESHOLD && lastValue && timeSinceLastTry > 900) {
             lastValue = false;
+            lastEventTime = millis();
             eventStorage->publishEvent(sensorFree);
         }
+    }
+
+    void sendMeasureCommand(int address) {
+        Wire.beginTransmission(address);
+        Wire.write(byte(0x00));
+        Wire.endTransmission();
+    }
+
+    unsigned short readLength(int address) {
+        unsigned char responseBuffer[2];
+        Wire.requestFrom(address, 2);
+        if (2 <= Wire.available()) {
+            responseBuffer[0] = Wire.read();
+            responseBuffer[1] = Wire.read();
+        }
+        unsigned short length;
+
+        length = responseBuffer[0];
+        length = length << 8;
+        length |= responseBuffer[1];
+
+        return length;
     }
 };
 
@@ -115,6 +147,8 @@ private:
     char PERSON_COME_OUTSIDE[EVENT_BUFFER_SIZE] = {BACK_OCCUPIED, FRONT_OCCUPIED, BACK_FREE, FRONT_FREE};
 
     float peopleCount = 0;
+    int timeInside = 0;
+    int timeOutside = 0;
     EventStorage *eventStorage;
     LaserSensor *frontSensor;
     LaserSensor *backSensor;
@@ -130,32 +164,46 @@ protected:
     }
 
 public:
-    PresenceLaserSensor(int frontSensorPin, int backSensorPin) {
+    PresenceLaserSensor(int frontSensorAddress, int backSensorAddress) {
         eventStorage = new EventStorage();
 
-        frontSensor = new LaserSensor(frontSensorPin, FRONT_OCCUPIED, FRONT_FREE, eventStorage);
-        backSensor = new LaserSensor(backSensorPin, BACK_OCCUPIED, BACK_FREE, eventStorage);
+        frontSensor = new LaserSensor(frontSensorAddress, FRONT_OCCUPIED, FRONT_FREE, eventStorage);
+        backSensor = new LaserSensor(backSensorAddress, BACK_OCCUPIED, BACK_FREE, eventStorage);
     }
 
     void setup() override {
-        frontSensor->setup();
-        backSensor->setup();
+        Wire.begin(16, 14);
 
         publish_state(peopleCount);
-
-        //TODO: Rename topic
-//        subscribe("the/topic", &PresenceLaserSensor::on_reset);
+        backSensor->setup();
+        frontSensor->setup();
+        timeInside = millis();
+        timeOutside = millis();
     }
 
     void loop() override {
         backSensor->checkState();
         frontSensor->checkState();
 
+        int timeSinceInside = millis() - timeInside;
+        int timeSinceOutside = millis() - timeOutside;
+
         if (eventStorage->compareBuffer((char *) PERSON_COME_INSIDE)) {
-            setPeopleCount(peopleCount + 1);
+            if (timeSinceOutside > 900) {
+                timeInside = millis();
+                setPeopleCount(peopleCount + 1);
+            }
             eventStorage->clearBuffer();
         } else if (eventStorage->compareBuffer((char *) PERSON_COME_OUTSIDE)) {
-            setPeopleCount(peopleCount - 1);
+            if(timeSinceInside > 900) {
+                timeOutside = millis();
+                peopleCount = peopleCount - 1;
+                if (peopleCount < 0.0) {
+                    peopleCount = 0.0;
+                }
+
+                setPeopleCount(peopleCount);
+            }
             eventStorage->clearBuffer();
         }
     }
