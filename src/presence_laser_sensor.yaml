@@ -31,6 +31,15 @@ mqtt:
   username: !secret mqtt_user
   password: !secret mqtt_password
 
+# Here 55 and 82 addresses is addresses of two lasers
+# 82 is default I2C address
+# By default address is 164 (0xa4)
+# but I2C uses only elder 7 bit, so it is 82
+# 55 is address that was set by next command
+# Serial1.begin(9600, SERIAL_8N1, 26, 25);
+# Serial1.print("s7-111#");
+# To find out address you can use I2C scanner
+
 sensor:
   - platform: custom
     lambda: |-
