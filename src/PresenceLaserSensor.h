@@ -1,7 +1,7 @@
 #ifndef PRESENCE_LASER_SENSOR_H
 #define PRESENCE_LASER_SENSOR_H
 
-#include "esphome.h"
+#include <esphome.h>
 #include <Wire.h>
 
 #define THRESHOLD 700
@@ -16,7 +16,7 @@
 
 using namespace esphome;
 using namespace sensor;
-using namespace mqtt;
+using namespace api;
 
 class EventStorage {
 private:
@@ -141,7 +141,7 @@ public:
     }
 };
 
-class PresenceLaserSensor : public Component, public Sensor, public CustomMQTTDevice {
+class PresenceLaserSensor : public Component, public Sensor, public CustomAPIDevice  {
 private:
     char PERSON_COME_INSIDE[EVENT_BUFFER_SIZE] = {FRONT_OCCUPIED, BACK_OCCUPIED, FRONT_FREE, BACK_FREE};
     char PERSON_COME_OUTSIDE[EVENT_BUFFER_SIZE] = {BACK_OCCUPIED, FRONT_OCCUPIED, BACK_FREE, FRONT_FREE};
@@ -152,11 +152,6 @@ private:
     EventStorage *eventStorage;
     LaserSensor *frontSensor;
     LaserSensor *backSensor;
-
-    void setPeopleCount(float count) {
-        this->peopleCount = count;
-        publish_state(peopleCount);
-    }
 
 protected:
     std::string icon() override {
@@ -170,6 +165,10 @@ public:
         frontSensor = new LaserSensor(frontSensorAddress, FRONT_OCCUPIED, FRONT_FREE, eventStorage);
         backSensor = new LaserSensor(backSensorAddress, BACK_OCCUPIED, BACK_FREE, eventStorage);
     }
+    void setPeopleCount(float count) {
+        this->peopleCount = count;
+        publish_state(peopleCount);
+    }
 
     void setup() override {
         Wire.begin(16, 14);
@@ -179,6 +178,8 @@ public:
         frontSensor->setup();
         timeInside = millis();
         timeOutside = millis();
+
+        register_service(&PresenceLaserSensor::setPeopleCount, "set_people_count", {"count"});
     }
 
     void loop() override {
@@ -206,11 +207,6 @@ public:
             }
             eventStorage->clearBuffer();
         }
-    }
-
-
-    void on_reset(const std::string &payload) {
-
     }
 };
 

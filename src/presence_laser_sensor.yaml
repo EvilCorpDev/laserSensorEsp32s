@@ -26,11 +26,6 @@ logger:
 
 api:
 
-mqtt:
-  broker: !secret mqtt_broker
-  username: !secret mqtt_user
-  password: !secret mqtt_password
-
 # Here 55 and 82 addresses is addresses of two lasers
 # 82 is default I2C address
 # By default address is 164 (0xa4)
